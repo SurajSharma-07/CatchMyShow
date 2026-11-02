@@ -1,0 +1,8 @@
+package com.example.movietickets.controller;
+import com.example.movietickets.model.*; import com.example.movietickets.repository.*; import org.springframework.web.bind.annotation.*; import java.util.*;
+@RestController @RequestMapping("/api")
+public class MovieController { private final MovieRepository movies; private final ShowtimeRepository showtimes; private final BookingSeatRepository seats; public MovieController(MovieRepository movies,ShowtimeRepository showtimes,BookingSeatRepository seats){this.movies=movies;this.showtimes=showtimes;this.seats=seats;}
+ @GetMapping("/movies") public List<Movie> movies(@RequestParam(required=false) String search){List<Movie> list=movies.findByActiveTrue(); if(search==null||search.isBlank())return list; String q=search.toLowerCase(); return list.stream().filter(m->m.getTitle().toLowerCase().contains(q)||m.getGenre().toLowerCase().contains(q)).toList();}
+ @GetMapping("/movies/{id}/showtimes") public List<Showtime> showtimes(@PathVariable Long id){return showtimes.findByMovieIdAndActiveTrueOrderByStartTime(id);}
+ @GetMapping("/showtimes/{id}/seats") public Map<String,Object> seats(@PathVariable Long id){Showtime s=showtimes.findById(id).orElseThrow(); Map<String,Object> result=new LinkedHashMap<>();result.put("showtimeId",id);result.put("bookedSeats",seats.findBookedSeats(id));result.put("rows",List.of("A","B","C","D","E","F","G","H"));result.put("seatsPerRow",6);result.put("classicPrice",s.getClassicPrice());result.put("premiumPrice",s.getPremiumPrice());result.put("reclinerPrice",s.getReclinerPrice());result.put("format",s.getFormat());result.put("formatSurcharge",s.getFormatSurcharge());return result;}
+}

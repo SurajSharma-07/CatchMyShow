@@ -1,0 +1,14 @@
+package com.example.movietickets.service;
+
+import com.example.movietickets.dto.BookingRequest; import com.example.movietickets.model.*; import com.example.movietickets.repository.*; import org.springframework.stereotype.Service; import org.springframework.transaction.annotation.Transactional; import java.util.*; import java.util.stream.Collectors;
+
+@Service
+public class BookingService {
+ private final ShowtimeRepository showtimes; private final BookingSeatRepository bookingSeats; private final BookingRepository bookings;
+ public BookingService(ShowtimeRepository showtimes,BookingSeatRepository bookingSeats,BookingRepository bookings){this.showtimes=showtimes;this.bookingSeats=bookingSeats;this.bookings=bookings;}
+ @Transactional(readOnly=true) public Set<String> bookedSeats(Long showtimeId){return bookingSeats.findBookedSeats(showtimeId);}
+ @Transactional public synchronized Booking create(BookingRequest request){ Showtime showtime=showtimes.findDetailedActive(request.showtimeId()).orElseThrow(()->new IllegalArgumentException("Showtime not found")); String paymentMethod=request.paymentMethod().trim().toUpperCase(); if(!Set.of("UPI","CARD","NET_BANKING").contains(paymentMethod)) throw new IllegalArgumentException("Choose a valid demo payment method"); List<String> seats=request.seats().stream().map(String::trim).map(String::toUpperCase).distinct().toList(); Set<String> booked=bookingSeats.findBookedSeats(showtime.getId()); if(seats.stream().anyMatch(booked::contains)) throw new IllegalStateException("One or more selected seats are already booked"); if(seats.stream().anyMatch(s->!s.matches("^[A-H]([1-6])$"))) throw new IllegalArgumentException("Invalid seat selection"); double total=seats.stream().mapToDouble(seat->priceForSeat(showtime,seat)).sum(); Booking booking=new Booking(showtime,request.customerName(),request.customerEmail(),total,"MTB-"+UUID.randomUUID().toString().substring(0,8).toUpperCase(),paymentMethod,"PAID","DEMO-TXN-"+UUID.randomUUID().toString().substring(0,10).toUpperCase()); seats.forEach(s->booking.addSeat(new BookingSeat(showtime,s))); return bookings.save(booking); }
+ private double priceForSeat(Showtime showtime,String seat){double base=seat.startsWith("A")||seat.startsWith("B")?showtime.getPremiumPrice():seat.startsWith("G")||seat.startsWith("H")?showtime.getReclinerPrice():showtime.getClassicPrice();return base+showtime.getFormatSurcharge();}
+ @Transactional(readOnly=true) public Booking find(String code){return bookings.findByBookingCode(code.trim().toUpperCase()).orElseThrow(()->new NoSuchElementException("Booking not found"));}
+ @Transactional(readOnly=true) public Booking findLatestByEmail(String email){return bookings.findFirstByCustomerEmailIgnoreCaseOrderByBookedAtDesc(email.trim()).orElseThrow(()->new NoSuchElementException("No booking found for this email"));}
+}
